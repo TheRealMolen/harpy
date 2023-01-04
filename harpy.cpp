@@ -48,6 +48,13 @@ public:
 		dsy_gpio_write(&m_b, (b < 0.25f) ? 0 : 1);
 	}
 
+	void SetRgb(u8 r, u8 g, u8 b)
+	{
+		dsy_gpio_write(&m_r, r);
+		dsy_gpio_write(&m_g, g);
+		dsy_gpio_write(&m_b, b);
+	}
+
 private:
 	dsy_gpio m_r, m_g, m_b;
 };
@@ -71,7 +78,7 @@ Switch btn1, btn2;
 AnalogControl pot1, pot2;
 
 
-void InitAdcInputs()
+void InitHwIO()
 {
 	adcChannelCfgs[u8(AdcInputs::Pot1)].InitSingle(hw.GetPin(21));
 	adcChannelCfgs[u8(AdcInputs::Pot2)].InitSingle(hw.GetPin(15));
@@ -79,6 +86,12 @@ void InitAdcInputs()
 
 	pot1.Init(hw.adc.GetPtr(u8(AdcInputs::Pot1)), hw.AudioCallbackRate());
 	pot2.Init(hw.adc.GetPtr(u8(AdcInputs::Pot2)), hw.AudioCallbackRate());
+
+	btn1.Init(hw.GetPin(27));
+	btn2.Init(hw.GetPin(28));
+
+	led1.Init(hw, 20, 19, 18);
+	led2.Init(hw, 17, 24, 23);
 }
 
 
@@ -92,8 +105,9 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 		if (metro.Process())
 		{
 			exciteEnv.Trigger();
-			string.SetFreq(btn1.RawState() ? 180.f : 55.f);
-			//string.SetFreq(fmap(freqInput, 55.f, 880.f, Mapping::EXP));
+			//string.SetFreq(btn1.RawState() ? 180.f : 55.f);
+			string.SetFreq(fmap(pot1.Value(), 55.f, 880.f, Mapping::EXP));
+			string.SetDamping(pot2.Value());
 		}
 
 		float excite = exciteEnv.Process() * noise.Process();
@@ -104,7 +118,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 		lowPass.Process(rawString);
 		[[maybe_unused]] float filtered = lowPass.Low();
 
-		float output = rawString;
+		float output = filtered;
 		OUT_L[i] = output;
 		OUT_R[i] = output;
 	}
@@ -114,13 +128,13 @@ int main(void)
 {
 	hw.Init();
 
-    hw.StartLog(true);
-    hw.PrintLine("heyo dumbass");
+    //hw.StartLog(false);
+    //hw.PrintLine("heyo dumbass");
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
 	hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
 
-	InitAdcInputs();
+	InitHwIO();
 
 	auto sampleRate = hw.AudioSampleRate();
 	metro.Init(2.f, sampleRate);
@@ -130,16 +144,7 @@ int main(void)
 	drive.Init();
 	lowPass.Init(sampleRate);
 
-	btn1.Init(hw.GetPin(27));
-	btn2.Init(hw.GetPin(28));
-
-	led1.Init(hw, 20, 19, 18);
-	led2.Init(hw, 17, 24, 23);
-
-	led1.SetRgb(1.f, 1.f, 1.f);
-	led2.SetRgb(1.f, 1.f, 1.f);
-
-	lowPass.SetFreq(500.f);
+	lowPass.SetFreq(3000.f);
 	lowPass.SetRes(0.f);
 
 	exciteEnv.SetTime(ADENV_SEG_ATTACK, 0.001f);
@@ -150,12 +155,13 @@ int main(void)
 	hw.StartAudio(AudioCallback);
     hw.adc.Start();
 
+	u8 col = 0;
 	while(1)
 	{
 		hw.DelayMs(500);
 
-		hw.PrintLine(FLT_FMT3 FLT_FMT3, FLT_VAR3(pot1.Value()), FLT_VAR3(pot2.Value()));
-
-		led2.SetRgb(0.f, pot1.GetRawFloat(), pot2.GetRawFloat());
+		led1.SetRgb(u8(col & 4), u8(col & 2), u8(col & 1));
+		++col;
+		led2.SetRgb(0.f, pot1.Value(), pot2.Value());
 	}
 }
