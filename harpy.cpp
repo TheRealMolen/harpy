@@ -1,12 +1,6 @@
 #include "daisy_seed.h"
 #include "daisysp.h"
 
-#include "Control/adenv.h"
-#include "Effects/overdrive.h"
-#include "PhysicalModeling/KarplusString.h"
-#include "Noise/whitenoise.h"
-#include "Filters/svf.h"
-
 using namespace daisy;
 using namespace daisysp;
 
@@ -18,46 +12,152 @@ using u64 = uint64_t;
 using DaisyHw = DaisySeed;
 
 
+constexpr float lerp(float a, float b, float t)
+{
+	return a + (b-a) * t;
+}
+
+
 namespace mln
 {
 
+//----------------------------------------------------------------------------------------------------------------
+// RgbLed -- helper for addressing an RGB LED connected via 3 pins
+//
 class RgbLed
 {
 public:
-	void Init(DaisyHw& hw, u8 rPinIx, u8 gPinIx, u8 bPinIx)
+	void Init(DaisyHw& hw, const Pin& rPin, const Pin& gPin, const Pin& bPin)
 	{
-		m_r.pin = hw.GetPin(rPinIx);
-		m_g.pin = hw.GetPin(gPinIx);
-		m_b.pin = hw.GetPin(bPinIx);
+		m_rPin.Init(rPin, GPIO::Mode::OUTPUT);
+		m_gPin.Init(gPin, GPIO::Mode::OUTPUT);
+		m_bPin.Init(bPin, GPIO::Mode::OUTPUT);
 
-		m_r.mode = DSY_GPIO_MODE_OUTPUT_PP;
-		m_g.mode = DSY_GPIO_MODE_OUTPUT_PP;
-		m_b.mode = DSY_GPIO_MODE_OUTPUT_PP;
-
-		dsy_gpio_init(&m_r);
-		dsy_gpio_init(&m_g);
-		dsy_gpio_init(&m_b);
-
-		SetRgb(0.f, 0.f, 0.f);
+		SetRgb(u8(0), u8(0), u8(0));
 	}
 
 	void SetRgb(float r, float g, float b)
 	{
-		dsy_gpio_write(&m_r, (r < 0.25f) ? 0 : 1);
-		dsy_gpio_write(&m_g, (g < 0.25f) ? 0 : 1);
-		dsy_gpio_write(&m_b, (b < 0.25f) ? 0 : 1);
+		m_rPin.Write((r < 0.25f) ? 0 : 1);
+		m_gPin.Write((g < 0.25f) ? 0 : 1);
+		m_bPin.Write((b < 0.25f) ? 0 : 1);
 	}
 
 	void SetRgb(u8 r, u8 g, u8 b)
 	{
-		dsy_gpio_write(&m_r, r);
-		dsy_gpio_write(&m_g, g);
-		dsy_gpio_write(&m_b, b);
+		m_rPin.Write(r);
+		m_gPin.Write(g);
+		m_bPin.Write(b);
 	}
 
 private:
-	dsy_gpio m_r, m_g, m_b;
+	GPIO m_rPin, m_gPin, m_bPin;
 };
+
+
+//----------------------------------------------------------------------------------------------------------------
+// LowPass1P -- simple one pole filter - see https://www.earlevel.com/main/2012/12/15/a-one-pole-filter/
+//
+class LowPass1P
+{
+public:
+	void Init(float sampleRate)
+	{
+		m_rSampleRate = 1.f / sampleRate;
+		m_b1 = 0.f;
+		m_a0 = 1.f;
+		m_z1 = 0.f;
+	}
+
+	float Process(float in)
+	{
+		m_z1 = in * m_a0 + m_z1 * m_b1;
+		return m_z1;
+	}
+
+	void SetFreq(float cutoff)
+	{
+		float samplesPerHz = cutoff * m_rSampleRate;
+		m_b1 = expf(-TWOPI_F * samplesPerHz);
+		m_a0 = 1.f - m_b1;
+	}
+
+private:
+	float m_rSampleRate = 1.f / 48000.f;
+	float m_a0 = 1.f, m_b1 = 0.f;	// coefficients
+	float m_z1 = 0.f;
+};
+
+
+//----------------------------------------------------------------------------------------------------------------
+// String -- wangled ks stringish implementation
+//
+class String
+{
+public:
+	void Init(float sampleRate);
+
+	float Process(float excite);
+
+	void SetFreq(float hz);
+	void SetDamping(float amount);
+	void SetFilterTrack(float track)	{ m_filterTrack = track; }
+
+private:
+	static const u32 kMaxSampRate = 48'000;
+	static const u32 kMinNativeFreq = 20;
+	static const u32 kMaxDelaySamples = (kMaxSampRate + kMinNativeFreq-1) / kMinNativeFreq;
+
+    DelayLine<float, kMaxDelaySamples>	m_delay;
+
+	float m_sampleRate = 48000.f;
+	float m_rSampleRate = 1.f / 48000.f;
+	float m_freq = 220.f;
+	float m_filterTrack = 1.f;
+	LowPass1P m_filter;
+};
+
+
+void String::Init(float sampleRate)
+{
+	m_sampleRate = sampleRate;
+	m_rSampleRate = 1.f / sampleRate;
+
+	m_filter.Init(sampleRate);
+	m_delay.Init();
+	SetDamping(0.98f);
+	SetFilterTrack(1.f);
+	SetFreq(220.f);
+}
+
+float String::Process(float excite)
+{
+	float clampedFreq = fclamp(m_freq * m_rSampleRate, 0.f, 0.25f);
+
+	// clamp the delay so we can safely hermite interpolate
+	float delayInSamples = fclamp(1.f / clampedFreq, 4.f, kMaxDelaySamples - 4.f);
+	float out = m_delay.ReadHermite(delayInSamples);
+	out += excite;
+
+	out = m_filter.Process(out);
+
+	m_delay.Write(out);
+
+	return out;
+}
+
+void String::SetFreq(float hz)
+{
+	m_freq = hz;
+}
+
+void String::SetDamping(float amount)
+{
+	constexpr float DefaultCutoff = 200.f;
+	float filterFreq = lerp(DefaultCutoff, m_freq, m_filterTrack);
+	m_filter.SetFreq(filterFreq * (1.f + amount * 20.f));
+}
+
 }
 
 enum class AdcInputs : u8 { Pot1, Pot2, Count };
@@ -67,19 +167,21 @@ AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 DaisyHw hw;
 
 Metro metro;
-String string;
+mln::String string;
 AdEnv exciteEnv;
 WhiteNoise noise;
 Overdrive drive;
 Svf lowPass;
 
 mln::RgbLed led1, led2;
-Switch btn1, btn2;
+GPIO btn1, btn2;
 AnalogControl pot1, pot2;
 
 
 void InitHwIO()
 {
+	using namespace seed;
+
 	adcChannelCfgs[u8(AdcInputs::Pot1)].InitSingle(hw.GetPin(21));
 	adcChannelCfgs[u8(AdcInputs::Pot2)].InitSingle(hw.GetPin(15));
 	hw.adc.Init(adcChannelCfgs, u8(AdcInputs::Count));
@@ -87,11 +189,11 @@ void InitHwIO()
 	pot1.Init(hw.adc.GetPtr(u8(AdcInputs::Pot1)), hw.AudioCallbackRate());
 	pot2.Init(hw.adc.GetPtr(u8(AdcInputs::Pot2)), hw.AudioCallbackRate());
 
-	btn1.Init(hw.GetPin(27));
-	btn2.Init(hw.GetPin(28));
+	btn1.Init(D27, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+	btn2.Init(D28, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
-	led1.Init(hw, 20, 19, 18);
-	led2.Init(hw, 17, 24, 23);
+	led1.Init(hw, D20, D19, D18);
+	led2.Init(hw, D17, D24, D23);
 }
 
 
@@ -105,12 +207,12 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 		if (metro.Process())
 		{
 			exciteEnv.Trigger();
-			//string.SetFreq(btn1.RawState() ? 180.f : 55.f);
 			string.SetFreq(fmap(pot1.Value(), 55.f, 880.f, Mapping::EXP));
 			string.SetDamping(pot2.Value());
 		}
 
-		float excite = exciteEnv.Process() * noise.Process();
+		float exciteEnvAmount = exciteEnv.Process();
+		float excite = exciteEnvAmount * exciteEnvAmount * noise.Process();
 		float rawString = string.Process(excite);
 
 		[[maybe_unused]] float driven = drive.Process(rawString);
@@ -148,7 +250,7 @@ int main(void)
 	lowPass.SetRes(0.f);
 
 	exciteEnv.SetTime(ADENV_SEG_ATTACK, 0.001f);
-	exciteEnv.SetTime(ADENV_SEG_DECAY, 0.02f);
+	exciteEnv.SetTime(ADENV_SEG_DECAY, 0.01f);
 
 	string.SetFreq(110.f);
 
@@ -162,6 +264,6 @@ int main(void)
 
 		led1.SetRgb(u8(col & 4), u8(col & 2), u8(col & 1));
 		++col;
-		led2.SetRgb(0.f, pot1.Value(), pot2.Value());
+		led2.SetRgb(btn1.Read() ? 1.f : 0.f, pot1.Value(), pot2.Value());
 	}
 }
