@@ -1,23 +1,15 @@
 #include "daisy_seed.h"
 #include "daisysp.h"
 
+#include "ks.h"
+#include "mln_core.h"
+
 using namespace daisy;
 using namespace daisysp;
 
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
 using DaisyHw = DaisySeed;
 
-
-constexpr float lerp(float a, float b, float t)
-{
-	return a + (b-a) * t;
-}
-
-
+DelayLine<float, 1>a;
 namespace mln
 {
 
@@ -53,110 +45,6 @@ public:
 private:
 	GPIO m_rPin, m_gPin, m_bPin;
 };
-
-
-//----------------------------------------------------------------------------------------------------------------
-// LowPass1P -- simple one pole filter - see https://www.earlevel.com/main/2012/12/15/a-one-pole-filter/
-//
-class LowPass1P
-{
-public:
-	void Init(float sampleRate)
-	{
-		m_rSampleRate = 1.f / sampleRate;
-		m_b1 = 0.f;
-		m_a0 = 1.f;
-		m_z1 = 0.f;
-	}
-
-	float Process(float in)
-	{
-		m_z1 = in * m_a0 + m_z1 * m_b1;
-		return m_z1;
-	}
-
-	void SetFreq(float cutoff)
-	{
-		float samplesPerHz = cutoff * m_rSampleRate;
-		m_b1 = expf(-TWOPI_F * samplesPerHz);
-		m_a0 = 1.f - m_b1;
-	}
-
-private:
-	float m_rSampleRate = 1.f / 48000.f;
-	float m_a0 = 1.f, m_b1 = 0.f;	// coefficients
-	float m_z1 = 0.f;
-};
-
-
-//----------------------------------------------------------------------------------------------------------------
-// String -- wangled ks stringish implementation
-//
-class String
-{
-public:
-	void Init(float sampleRate);
-
-	float Process(float excite);
-
-	void SetFreq(float hz);
-	void SetDamping(float amount);
-	void SetFilterTrack(float track)	{ m_filterTrack = track; }
-
-private:
-	static const u32 kMaxSampRate = 48'000;
-	static const u32 kMinNativeFreq = 20;
-	static const u32 kMaxDelaySamples = (kMaxSampRate + kMinNativeFreq-1) / kMinNativeFreq;
-
-    DelayLine<float, kMaxDelaySamples>	m_delay;
-
-	float m_sampleRate = 48000.f;
-	float m_rSampleRate = 1.f / 48000.f;
-	float m_freq = 220.f;
-	float m_filterTrack = 1.f;
-	LowPass1P m_filter;
-};
-
-
-void String::Init(float sampleRate)
-{
-	m_sampleRate = sampleRate;
-	m_rSampleRate = 1.f / sampleRate;
-
-	m_filter.Init(sampleRate);
-	m_delay.Init();
-	SetDamping(0.98f);
-	SetFilterTrack(1.f);
-	SetFreq(220.f);
-}
-
-float String::Process(float excite)
-{
-	float clampedFreq = fclamp(m_freq * m_rSampleRate, 0.f, 0.25f);
-
-	// clamp the delay so we can safely hermite interpolate
-	float delayInSamples = fclamp(1.f / clampedFreq, 4.f, kMaxDelaySamples - 4.f);
-	float out = m_delay.ReadHermite(delayInSamples);
-	out += excite;
-
-	out = m_filter.Process(out);
-
-	m_delay.Write(out);
-
-	return out;
-}
-
-void String::SetFreq(float hz)
-{
-	m_freq = hz;
-}
-
-void String::SetDamping(float amount)
-{
-	constexpr float DefaultCutoff = 200.f;
-	float filterFreq = lerp(DefaultCutoff, m_freq, m_filterTrack);
-	m_filter.SetFreq(filterFreq * (1.f + amount * 20.f));
-}
 
 }
 
@@ -207,7 +95,7 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 		if (metro.Process())
 		{
 			exciteEnv.Trigger();
-			string.SetFreq(fmap(pot1.Value(), 55.f, 880.f, Mapping::EXP));
+			string.SetFreq(fmap(pot1.Value(), 55.f, 110.f * 16.f, Mapping::EXP));
 			string.SetDamping(pot2.Value());
 		}
 
@@ -246,11 +134,11 @@ int main(void)
 	drive.Init();
 	lowPass.Init(sampleRate);
 
-	lowPass.SetFreq(3000.f);
+	lowPass.SetFreq(2000.f);
 	lowPass.SetRes(0.f);
 
-	exciteEnv.SetTime(ADENV_SEG_ATTACK, 0.001f);
-	exciteEnv.SetTime(ADENV_SEG_DECAY, 0.01f);
+	exciteEnv.SetTime(ADENV_SEG_ATTACK, 0.0001f);
+	exciteEnv.SetTime(ADENV_SEG_DECAY, 0.005f);
 
 	string.SetFreq(110.f);
 
@@ -262,8 +150,19 @@ int main(void)
 	{
 		hw.DelayMs(500);
 
+		if (!btn1.Read())
+		{
+			string.UseDcBlock(true);
+			led2.SetRgb(0.f, 1.f, 0.f);
+		}
+		else if (!btn2.Read())
+		{
+			string.UseDcBlock(false);
+			led2.SetRgb(1.f, 0.f, 0.f);
+		}
+
 		led1.SetRgb(u8(col & 4), u8(col & 2), u8(col & 1));
 		++col;
-		led2.SetRgb(btn1.Read() ? 1.f : 0.f, pot1.Value(), pot2.Value());
+		//led2.SetRgb(btn1.Read() ? 1.f : 0.f, pot1.Value(), pot2.Value());
 	}
 }

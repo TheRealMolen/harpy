@@ -3,16 +3,18 @@
     {
       "cStandard": "c11",
       "compilerPath": "arm-none-eabi-g++.exe",
-      "cppStandard": "c++17",
+      "cppStandard": "c++20",
       "defines": [
         "_DEBUG",
         "UNICODE",
-        "_UNICODE"
+        "_UNICODE",
+        "USE_ARM_DSP"
       ],
       "includePath": [
-        "${workspaceFolder}/**",
+        "${workspaceFolder}/*",
         "${workspaceFolder}/../DaisyExamples/libDaisy/**",
-        "${workspaceFolder}/../DaisyExamples/DaisySP/**"
+        "${workspaceFolder}/../DaisyExamples/DaisySP/**",
+        "C:/Program Files/DaisyToolchain/arm-none-eabi/include/c++/10.2.1"
       ],
       "name": "Win32",
       "windowsSdkVersion": "10.0.17763.0"
@@ -20,14 +22,14 @@
     {
       "cStandard": "c11",
       "compilerPath": "/usr/local/bin/arm-none-eabi-g++",
-      "cppStandard": "c++17",
+      "cppStandard": "c++20",
       "defines": [
         "_DEBUG",
         "UNICODE",
         "_UNICODE"
       ],
       "includePath": [
-        "${workspaceFolder}/**",
+        "${workspaceFolder}/*",
         "${workspaceFolder}/../DaisyExamples/libDaisy/**",
         "${workspaceFolder}/../DaisyExamples/DaisySP/**"
       ],
