@@ -4,12 +4,23 @@
 #include <cstdint>
 
 #include <math.h>           // this drags math functions like lerp and fmin into the global namespace. the stm HAL code includes this, so make sure we always have it for consistency
-#include "Utility/dsp.h"
+
+#include "daisy_seed.h"
+#include "daisysp.h"
 
 #ifdef _MSC_VER
 // msvc
 #include <malloc.h>
 #endif
+
+
+//-------------------------------------------------------------------------------------------------------------
+
+using DaisyHw = daisy::DaisySeed;
+using daisy::GPIO;
+using daisy::Pin;
+
+extern DaisyHw hw;
 
 //-------------------------------------------------------------------------------------------------------------
 

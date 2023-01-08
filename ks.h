@@ -35,6 +35,8 @@ public:
 	void SetDamping(float amount);
 	void SetFilterTrack(float track)	{ m_filterTrack = track; }
 
+	float GetFreq() const { return m_freq; }
+
 	void UseDcBlock(bool use) { m_useDcBlock = use; }
 
 private:

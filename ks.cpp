@@ -45,7 +45,7 @@ float String::Process(float excite)
 	if (m_useDcBlock)
 		out = dcBlocked;
 	else
-		out *= 0.999f;	// ... but this seems to work reasonably well too, and results in a better tone. TODO: tune this! probably wants to be freq-dependent
+		out *= 0.995f;	// ... but this seems to work reasonably well too, and results in a better tone. TODO: tune this! probably wants to be freq-dependent
 
 	out = m_filter.Process(out);
 

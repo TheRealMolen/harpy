@@ -4,9 +4,15 @@
 #include "ks.h"
 #include "mln_core.h"
 
+#include "voicemgr.h"
+
 using DaisyHw = daisy::DaisySeed;
 using daisy::GPIO;
 using daisy::Pin;
+
+
+DaisyHw hw;
+daisy::MidiUartHandler midi;
 
 namespace mln
 {
@@ -47,66 +53,11 @@ private:
 }
 
 
-class Voice
-{
-public:
-	void Init(float sampleRate);
-
-	float Process();
-
-	void NoteOn(u8 note, float damping);
-
-	void UseDcBlock(bool use) { m_string.UseDcBlock(use); }
-
-private:
-	mln::String m_string;
-	daisysp::AdEnv m_exciteEnv;
-	daisysp::WhiteNoise m_noise;
-	daisysp::Svf m_lowPass;
-};
-
-void Voice::Init(float sampleRate)
-{
-	m_string.Init(sampleRate);
-	m_exciteEnv.Init(sampleRate);
-	m_noise.Init();
-	m_lowPass.Init(sampleRate);
-
-	m_lowPass.SetFreq(2000.f);
-	m_lowPass.SetRes(0.f);
-
-	m_exciteEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.0001f);
-	m_exciteEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.005f);
-}
-
-float Voice::Process()
-{
-	float exciteEnvAmount = m_exciteEnv.Process();
-	float excite = exciteEnvAmount * exciteEnvAmount * m_noise.Process();
-	float rawString = m_string.Process(excite);
-
-	m_lowPass.Process(rawString);
-	float filtered = m_lowPass.Low();
-
-	return filtered;
-}
-
-void Voice::NoteOn(u8 note, float damping)
-{
-	m_exciteEnv.Trigger();
-	m_string.SetFreq(daisysp::mtof(note));
-	m_string.SetDamping(damping);
-}
-
-
 enum class AdcInputs : u8 { Pot1, Pot2, Count };
 daisy::AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 
 
-DaisyHw hw;
-daisy::MidiUartHandler midi;
-
-Voice voice;
+VoiceMgr voiceMgr;
 
 mln::RgbLed led1, led2;
 GPIO btn1, btn2;
@@ -142,7 +93,7 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 
 	for (size_t i = 0; i < size; i++)
 	{
-		float output = voice.Process();
+		float output = voiceMgr.Process();
 		OUT_L[i] = output;
 		OUT_R[i] = output;
 	}
@@ -151,18 +102,20 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 
 void HandleNoteOff(u8 chan, u8 note)
 {
+	voiceMgr.NoteOff(note);
 }
 void HandleNoteOn(u8 chan, u8 note, u8 vel)
 {
 	if (vel == 0)
 		return HandleNoteOff(chan, note);
 
-	voice.NoteOn(note, pot2.Value());
+	voiceMgr.NoteOn(note, pot2.Value());
 }
 
 void HandleMidiMessage(const daisy::MidiEvent& msg)
 {
-	hw.PrintLine("midi: m=%02x, c=%02x [%d, %d]", int(msg.type), int(msg.channel), int(msg.data[0]), int(msg.data[1]));
+	//if (msg.type != daisy::ChannelPressure)
+	//	hw.PrintLine("midi: m=%02x, c=%02x [%d, %d]", int(msg.type), int(msg.channel), int(msg.data[0]), int(msg.data[1]));
 
 	switch (msg.type)
 	{
@@ -176,9 +129,10 @@ void HandleMidiMessage(const daisy::MidiEvent& msg)
 int main(void)
 {
 	hw.Init();
+	hw.SetLed(true);
 
- //   hw.StartLog(false);
- //   hw.PrintLine("heyo dumbass");
+    //hw.StartLog(false);
+    //hw.PrintLine("heyo dumbass");
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
 	hw.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -186,7 +140,7 @@ int main(void)
 	InitHwIO();
 
 	auto sampleRate = hw.AudioSampleRate();
-	voice.Init(sampleRate);
+	voiceMgr.Init(sampleRate);
 
 	midi.StartReceive();
 
@@ -210,7 +164,7 @@ int main(void)
 		// handle any new midi events
 		while (midi.HasEvents())
 			HandleMidiMessage(midi.PopEvent());
-
+/*
 		if (!btn1.Read())
 		{
 			voice.UseDcBlock(true);
@@ -220,7 +174,7 @@ int main(void)
 		{
 			voice.UseDcBlock(false);
 			led2.SetRgb(1.f, 0.f, 0.f);
-		}
+		}*/
 
 		//led2.SetRgb(btn1.Read() ? 1.f : 0.f, pot1.Value(), pot2.Value());
 	}
