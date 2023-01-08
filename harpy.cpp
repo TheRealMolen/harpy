@@ -58,6 +58,7 @@ daisy::AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 
 
 VoiceMgr voiceMgr;
+float modWheel = 0.f;
 
 mln::RgbLed led1, led2;
 GPIO btn1, btn2;
@@ -93,7 +94,7 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 
 	for (size_t i = 0; i < size; i++)
 	{
-		float output = voiceMgr.Process();
+		float output = voiceMgr.Process(modWheel);
 		OUT_L[i] = output;
 		OUT_R[i] = output;
 	}
@@ -112,6 +113,13 @@ void HandleNoteOn(u8 chan, u8 note, u8 vel)
 	voiceMgr.NoteOn(note, pot2.Value());
 }
 
+void HandleCC(u8 chan, u8 cc, u8 val)
+{
+	float fval = float(val) * (1.f / 127.f);
+	if (cc == 1)	// modwheel
+		modWheel = fval;
+}
+
 void HandleMidiMessage(const daisy::MidiEvent& msg)
 {
 	//if (msg.type != daisy::ChannelPressure)
@@ -119,8 +127,9 @@ void HandleMidiMessage(const daisy::MidiEvent& msg)
 
 	switch (msg.type)
 	{
-		case daisy::NoteOn:		return HandleNoteOn(msg.channel, msg.data[0], msg.data[1]);
-		case daisy::NoteOff:	return HandleNoteOff(msg.channel, msg.data[0]);
+		case daisy::NoteOn:			return HandleNoteOn(msg.channel, msg.data[0], msg.data[1]);
+		case daisy::NoteOff:		return HandleNoteOff(msg.channel, msg.data[0]);
+		case daisy::ControlChange:	return HandleCC(msg.channel, msg.data[0], msg.data[1]);
 		default: break;
 	}
 }
@@ -131,8 +140,8 @@ int main(void)
 	hw.Init();
 	hw.SetLed(true);
 
-    //hw.StartLog(false);
-    //hw.PrintLine("heyo dumbass");
+//    hw.StartLog(false);
+//    hw.PrintLine("heyo dumbass");
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
 	hw.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
