@@ -4,12 +4,10 @@
 #include "ks.h"
 #include "mln_core.h"
 
-using namespace daisy;
-using namespace daisysp;
+using DaisyHw = daisy::DaisySeed;
+using daisy::GPIO;
+using daisy::Pin;
 
-using DaisyHw = DaisySeed;
-
-DelayLine<float, 1>a;
 namespace mln
 {
 
@@ -48,27 +46,76 @@ private:
 
 }
 
+
+class Voice
+{
+public:
+	void Init(float sampleRate);
+
+	float Process();
+
+	void NoteOn(u8 note, float damping);
+
+	void UseDcBlock(bool use) { m_string.UseDcBlock(use); }
+
+private:
+	mln::String m_string;
+	daisysp::AdEnv m_exciteEnv;
+	daisysp::WhiteNoise m_noise;
+	daisysp::Svf m_lowPass;
+};
+
+void Voice::Init(float sampleRate)
+{
+	m_string.Init(sampleRate);
+	m_exciteEnv.Init(sampleRate);
+	m_noise.Init();
+	m_lowPass.Init(sampleRate);
+
+	m_lowPass.SetFreq(2000.f);
+	m_lowPass.SetRes(0.f);
+
+	m_exciteEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.0001f);
+	m_exciteEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.005f);
+}
+
+float Voice::Process()
+{
+	float exciteEnvAmount = m_exciteEnv.Process();
+	float excite = exciteEnvAmount * exciteEnvAmount * m_noise.Process();
+	float rawString = m_string.Process(excite);
+
+	m_lowPass.Process(rawString);
+	float filtered = m_lowPass.Low();
+
+	return filtered;
+}
+
+void Voice::NoteOn(u8 note, float damping)
+{
+	m_exciteEnv.Trigger();
+	m_string.SetFreq(daisysp::mtof(note));
+	m_string.SetDamping(damping);
+}
+
+
 enum class AdcInputs : u8 { Pot1, Pot2, Count };
-AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
+daisy::AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 
 
 DaisyHw hw;
+daisy::MidiUartHandler midi;
 
-Metro metro;
-mln::String string;
-AdEnv exciteEnv;
-WhiteNoise noise;
-Overdrive drive;
-Svf lowPass;
+Voice voice;
 
 mln::RgbLed led1, led2;
 GPIO btn1, btn2;
-AnalogControl pot1, pot2;
+daisy::AnalogControl pot1, pot2;
 
 
 void InitHwIO()
 {
-	using namespace seed;
+	using namespace daisy::seed;
 
 	adcChannelCfgs[u8(AdcInputs::Pot1)].InitSingle(hw.GetPin(21));
 	adcChannelCfgs[u8(AdcInputs::Pot2)].InitSingle(hw.GetPin(15));
@@ -82,87 +129,99 @@ void InitHwIO()
 
 	led1.Init(hw, D20, D19, D18);
 	led2.Init(hw, D17, D24, D23);
+
+    daisy::MidiUartHandler::Config midi_config;
+    midi.Init(midi_config);
 }
 
 
-void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
+void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::OutputBuffer out, size_t size)
 {
 	pot1.Process();
 	pot2.Process();
 
 	for (size_t i = 0; i < size; i++)
 	{
-		if (metro.Process())
-		{
-			exciteEnv.Trigger();
-			string.SetFreq(fmap(pot1.Value(), 55.f, 110.f * 16.f, Mapping::EXP));
-			string.SetDamping(pot2.Value());
-		}
-
-		float exciteEnvAmount = exciteEnv.Process();
-		float excite = exciteEnvAmount * exciteEnvAmount * noise.Process();
-		float rawString = string.Process(excite);
-
-		[[maybe_unused]] float driven = drive.Process(rawString);
-
-		lowPass.Process(rawString);
-		[[maybe_unused]] float filtered = lowPass.Low();
-
-		float output = filtered;
+		float output = voice.Process();
 		OUT_L[i] = output;
 		OUT_R[i] = output;
 	}
 }
 
+
+void HandleNoteOff(u8 chan, u8 note)
+{
+}
+void HandleNoteOn(u8 chan, u8 note, u8 vel)
+{
+	if (vel == 0)
+		return HandleNoteOff(chan, note);
+
+	voice.NoteOn(note, pot2.Value());
+}
+
+void HandleMidiMessage(const daisy::MidiEvent& msg)
+{
+	hw.PrintLine("midi: m=%02x, c=%02x [%d, %d]", int(msg.type), int(msg.channel), int(msg.data[0]), int(msg.data[1]));
+
+	switch (msg.type)
+	{
+		case daisy::NoteOn:		return HandleNoteOn(msg.channel, msg.data[0], msg.data[1]);
+		case daisy::NoteOff:	return HandleNoteOff(msg.channel, msg.data[0]);
+		default: break;
+	}
+}
+
+
 int main(void)
 {
 	hw.Init();
 
-    //hw.StartLog(false);
-    //hw.PrintLine("heyo dumbass");
+ //   hw.StartLog(false);
+ //   hw.PrintLine("heyo dumbass");
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
-	hw.SetAudioSampleRate(SaiHandle::Config::SampleRate::SAI_48KHZ);
+	hw.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
 
 	InitHwIO();
 
 	auto sampleRate = hw.AudioSampleRate();
-	metro.Init(2.f, sampleRate);
-	exciteEnv.Init(sampleRate);
-	string.Init(sampleRate);
-	noise.Init();
-	drive.Init();
-	lowPass.Init(sampleRate);
+	voice.Init(sampleRate);
 
-	lowPass.SetFreq(2000.f);
-	lowPass.SetRes(0.f);
-
-	exciteEnv.SetTime(ADENV_SEG_ATTACK, 0.0001f);
-	exciteEnv.SetTime(ADENV_SEG_DECAY, 0.005f);
-
-	string.SetFreq(110.f);
+	midi.StartReceive();
 
 	hw.StartAudio(AudioCallback);
     hw.adc.Start();
 
-	u8 col = 0;
-	while(1)
+	[[maybe_unused]] u32 lastMsgTick = hw.system.GetNow();
+	[[maybe_unused]] const u32 msgFreq = 1000;
+	for (;;)
 	{
-		hw.DelayMs(500);
+		// u32 now = hw.system.GetNow();
+		// if ((now - lastMsgTick) > msgFreq)
+		// {
+		// 	hw.PrintLine("still here...");
+		// 	lastMsgTick = now;
+		// }
+
+		// tick the UART receiver
+		midi.Listen();
+
+		// handle any new midi events
+		while (midi.HasEvents())
+			HandleMidiMessage(midi.PopEvent());
 
 		if (!btn1.Read())
 		{
-			string.UseDcBlock(true);
+			voice.UseDcBlock(true);
 			led2.SetRgb(0.f, 1.f, 0.f);
 		}
 		else if (!btn2.Read())
 		{
-			string.UseDcBlock(false);
+			voice.UseDcBlock(false);
 			led2.SetRgb(1.f, 0.f, 0.f);
 		}
 
-		led1.SetRgb(u8(col & 4), u8(col & 2), u8(col & 1));
-		++col;
 		//led2.SetRgb(btn1.Read() ? 1.f : 0.f, pot1.Value(), pot2.Value());
 	}
 }

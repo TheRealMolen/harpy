@@ -63,7 +63,7 @@ void String::SetDamping(float amount)
 {
 	constexpr float DefaultCutoff = 55.f;
 	const float filterRootFreq = flerp(DefaultCutoff, m_freq, m_filterTrack);
-	const float filterOctaves = fmaxf(1.f + (amount * amount * 3.f), 1.f);
+	const float filterOctaves = fmaxf(2.f + (amount * amount * 4.f), 2.f);
 	const float filterFreqScale = powf(2.f, filterOctaves);
 	const float filterFreq = filterFreqScale * filterRootFreq;
 

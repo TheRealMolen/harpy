@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstdint>
 
+#include <math.h>           // this drags math functions like lerp and fmin into the global namespace. the stm HAL code includes this, so make sure we always have it for consistency
 #include "Utility/dsp.h"
 
 #ifdef _MSC_VER
@@ -26,9 +27,6 @@ using uint = unsigned int;
 using std::pair;
 using std::begin;
 using std::end;
-
-using daisysp::fclamp;
-
 
 constexpr float kPi = PI_F;
 constexpr float kTwoPi = kPi * 2.0f;
@@ -78,12 +76,14 @@ inline bool isSimilar(float a, float b, float epsilon=kEpsilon)
 
 //-------------------------------------------------------------------------------------------------------------
 
-using std::clamp;
-
-// note: daisytoolchain\arm-none-eabi\include\c++\10.2.1\math.h (glibc++ math.h) pulls std::lerp into global ns :(
 constexpr inline float flerp(float a, float b, float t)
 {
 	return a + (b-a) * t;
+}
+
+constexpr inline float fclamp(float x, float lo, float hi)
+{
+    return fmaxf(fminf(x, hi), lo);
 }
 
 //-------------------------------------------------------------------------------------------------------------
