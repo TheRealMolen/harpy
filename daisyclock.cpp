@@ -1,5 +1,7 @@
 #include "daisyclock.h"
 
+#ifdef D_ENABLE_CPU_PROFILING
+
 //----------------------------------------------------------------------------------------------------------------
 
 const char* DaisyClock::TimerNames[] =
@@ -15,3 +17,6 @@ static_assert(sizeof(DaisyClock::TimerNames) / sizeof(DaisyClock::TimerNames[0])
 // global clock instance
 DaisyClock DaisyClock::g_clock;
 
+//----------------------------------------------------------------------------------------------------------------
+
+#endif // D_ENABLE_CPU_PROFILING

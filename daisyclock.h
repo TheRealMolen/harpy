@@ -13,7 +13,7 @@
 #include "Drivers/CMSIS/Device/ST/STM32H7xx/Include/stm32h750xx.h"
 #include "daisy_seed.h"
 
-#define D_ENABLE_CPU_PROFILING
+#define D_ENABLE_CPU_PROFILINGx
 
 
 #ifdef D_ENABLE_CPU_PROFILING
@@ -128,8 +128,6 @@ private:
     uint32_t m_startTicks;
 };
 
-#define AUTOPROFILE(timer)      ProfileAutoTime autoprofile_##timer(DaisyClock::Timer:: timer)
-
 //----------------------------------------------------------------------------------------------------------------
 
 // commonly used like:
@@ -159,8 +157,14 @@ void PrintReport(DaisyHardware& hw, const DaisyClock::Report& report)
     hw.PrintLine(" ---");
 }
 
+//----------------------------------------------------------------------------------------------------------------
+
+#define INITPROFILER(hw)        DaisyClock::Get().Init(hw)
+#define AUTOPROFILE(timer)      ProfileAutoTime autoprofile_##timer(DaisyClock::Timer:: timer)
+
 #else
 
+#define INITPROFILER(hw)        do{}while(0)
 #define AUTOPROFILE(timer)      do{}while(0)
 
 #endif // D_ENABLE_CPU_PROFILING

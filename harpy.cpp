@@ -111,6 +111,8 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 }
 
 
+u8 ledCol = 0;
+
 void HandleNoteOff(u8 chan, u8 note)
 {
 	voiceMgr.NoteOff(note);
@@ -119,6 +121,11 @@ void HandleNoteOn(u8 chan, u8 note, u8 vel)
 {
 	if (vel == 0)
 		return HandleNoteOff(chan, note);
+
+	++ledCol;
+	if (ledCol >= 8)
+		ledCol = 0;
+	led1.SetRgb(u8(ledCol & 4), u8(ledCol & 2), u8(ledCol & 1));
 
 	voiceMgr.NoteOn(note, pot2.Value());
 }
@@ -150,10 +157,10 @@ int main(void)
 	hw.Init();
 	hw.SetLed(true);
 
-	DaisyClock::Get().Init(hw);
+	INITPROFILER(hw);
 
-    hw.StartLog(false);
-    hw.PrintLine("heyo dumbass");
+    // hw.StartLog(false);
+    // hw.PrintLine("heyo dumbass");
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
 	hw.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -176,6 +183,7 @@ int main(void)
 	{
 		AUTOPROFILE(Total);
 
+#if D_ENABLE_CPU_PROFILING
 		u32 now = hw.system.GetNow();
 		if ((now - lastMsgTick) > msgFreq)
 		{
@@ -186,6 +194,7 @@ int main(void)
 
 		 	lastMsgTick = now;
 		}
+#endif
 
 		// tick the UART receiver
 		midi.Listen();
