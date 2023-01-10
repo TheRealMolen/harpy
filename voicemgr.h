@@ -5,6 +5,8 @@
 #include "inplace_vector.h"
 #include "voice.h"
 
+#include "daisyclock.h"
+
 
 //----------------------------------------------------------------------------------------------------------------
 // VoiceMgr -- polyphonic voice manager
@@ -23,6 +25,8 @@ public:
 
 	float Process(float p1)
 	{
+		AUTOPROFILE(VoiceManager);
+
 		float out = 0.f;
 		for (Voice& voice : m_voices)
 			out += voice.Process(p1);
@@ -31,9 +35,23 @@ public:
 
 	void NoteOn(u8 note, float damping)
 	{
+		//hw.Print("vm: noteon: %u voices released, %u voices playing. ", u32(m_released.size()), u32(m_playing.size()));
+
 		const VoiceId id = PickVoice(note);
+
+		//hw.PrintLine("picked voice %u", u32(id));
+
 		m_voices[id].NoteOn(note, damping);
 		m_playing.push_back(VoiceIdNotePair{id, note});
+
+		// hw.Print("....playing: ");
+		// for (const auto& idNote : m_playing)
+		// 	hw.Print("%u, ", u32(idNote.first));
+		// hw.PrintLine("--");
+		// hw.Print("....released: ");
+		// for (u8 id : m_released)
+		// 	hw.Print("%u, ", u32(id));
+		// hw.PrintLine("--");
 	}
 	void NoteOff(u8 note)
 	{
@@ -47,7 +65,7 @@ public:
 
 private:
 	using VoiceId = u8;
-	static const VoiceId MaxVoices = 6;
+	static const VoiceId MaxVoices = 8;
 	using VoiceIdList = inplace_vector<VoiceId, MaxVoices>;
 	using VoiceIdNotePair = pair<VoiceId, u8>;
 	using PlayingVoiceList = inplace_vector<VoiceIdNotePair, MaxVoices>;

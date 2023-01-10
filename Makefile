@@ -2,7 +2,7 @@
 TARGET = harpy
 
 # Sources
-CPP_SOURCES = harpy.cpp ks.cpp voice.cpp
+CPP_SOURCES = harpy.cpp ks.cpp voice.cpp daisyclock.cpp
 
 # Library Locations
 LIBDAISY_DIR = ../DaisyExamples/libDaisy

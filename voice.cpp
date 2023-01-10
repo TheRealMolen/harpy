@@ -1,5 +1,6 @@
 #include "voice.h"
 
+#include "daisyclock.h"
 
 
 void Voice::Init(float sampleRate)
@@ -39,6 +40,8 @@ float Voice::Process(float param1)
 
 float Voice::ProcessKS()
 {
+    AUTOPROFILE(Voice_KS);
+
 	float exciteEnvAmount = m_exciteEnv.Process();
 	float excite = exciteEnvAmount * exciteEnvAmount * m_noise.Process();
 	float rawString = m_string.Process(excite);
@@ -51,6 +54,8 @@ float Voice::ProcessKS()
 
 float Voice::ProcessLofi()
 {
+    AUTOPROFILE(Voice_Lofi);
+    
     float out = m_osc.Process();
     out *= (1.f / 6.f);    // approx match volume with ks
 
@@ -79,5 +84,5 @@ void Voice::NoteOn(u8 note, float damping)
 
     m_lofiEnv.Trigger();
     m_osc.SetFreq(freq);
-    m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.4f * damping);
+    m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
 }

@@ -3,6 +3,7 @@
 
 #include "ks.h"
 #include "mln_core.h"
+#include "daisyclock.h"
 
 #include "voicemgr.h"
 
@@ -89,6 +90,8 @@ void InitHwIO()
 
 void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::OutputBuffer out, size_t size)
 {
+	AUTOPROFILE(AudioCallback);
+
 	pot1.Process();
 	pot2.Process();
 
@@ -140,8 +143,10 @@ int main(void)
 	hw.Init();
 	hw.SetLed(true);
 
-//    hw.StartLog(false);
-//    hw.PrintLine("heyo dumbass");
+	DaisyClock::Get().Init(hw);
+
+    hw.StartLog(false);
+    hw.PrintLine("heyo dumbass");
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
 	hw.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
@@ -160,12 +165,18 @@ int main(void)
 	[[maybe_unused]] const u32 msgFreq = 1000;
 	for (;;)
 	{
-		// u32 now = hw.system.GetNow();
-		// if ((now - lastMsgTick) > msgFreq)
-		// {
-		// 	hw.PrintLine("still here...");
-		// 	lastMsgTick = now;
-		// }
+		AUTOPROFILE(Total);
+
+		u32 now = hw.system.GetNow();
+		if ((now - lastMsgTick) > msgFreq)
+		{
+			auto& clock = DaisyClock::Get();
+			auto report = clock.BuildReport();
+			clock.Reset();
+			PrintReport(hw, report);
+
+		 	lastMsgTick = now;
+		}
 
 		// tick the UART receiver
 		midi.Listen();
@@ -173,18 +184,5 @@ int main(void)
 		// handle any new midi events
 		while (midi.HasEvents())
 			HandleMidiMessage(midi.PopEvent());
-/*
-		if (!btn1.Read())
-		{
-			voice.UseDcBlock(true);
-			led2.SetRgb(0.f, 1.f, 0.f);
-		}
-		else if (!btn2.Read())
-		{
-			voice.UseDcBlock(false);
-			led2.SetRgb(1.f, 0.f, 0.f);
-		}*/
-
-		//led2.SetRgb(btn1.Read() ? 1.f : 0.f, pot1.Value(), pot2.Value());
 	}
 }
