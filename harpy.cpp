@@ -7,6 +7,8 @@
 
 #include "voicemgr.h"
 
+#include "highpass1p.h"
+
 using DaisyHw = daisy::DaisySeed;
 using daisy::GPIO;
 using daisy::Pin;
@@ -61,6 +63,8 @@ daisy::AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 VoiceMgr voiceMgr;
 float modWheel = 0.f;
 
+mln::HighPass1P highPass;
+
 mln::RgbLed led1, led2;
 GPIO btn1, btn2;
 daisy::AnalogControl pot1, pot2;
@@ -95,9 +99,12 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 	pot1.Process();
 	pot2.Process();
 
+	highPass.SetFreq(daisysp::fmap(pot1.Value(), 20.f, 10000.f, daisysp::Mapping::EXP));
+
 	for (size_t i = 0; i < size; i++)
 	{
 		float output = voiceMgr.Process(modWheel);
+		output = highPass.Process(output);
 		OUT_L[i] = output;
 		OUT_R[i] = output;
 	}
@@ -155,6 +162,8 @@ int main(void)
 
 	auto sampleRate = hw.AudioSampleRate();
 	voiceMgr.Init(sampleRate);
+	highPass.Init(sampleRate);
+	
 
 	midi.StartReceive();
 

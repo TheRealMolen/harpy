@@ -3,6 +3,8 @@
 #include "mln_core.h"
 
 #include "ks.h"
+#include "lowpass1p.h"
+#include "highpass1p.h"
 
 
 class Voice
@@ -31,7 +33,9 @@ private:
     daisysp::Oscillator m_osc;
     daisysp::Tremolo m_trem;
 	daisysp::AdEnv m_lofiEnv;
-    daisysp::Svf m_lofiLP;
-    daisysp::Svf m_lofiHP;
+    mln::LowPass1P m_lofiLP1;
+    mln::LowPass1P m_lofiLP2;
+    mln::HighPass1P m_lofiHP1;
+    mln::HighPass1P m_lofiHP2;
 };
 

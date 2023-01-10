@@ -18,15 +18,19 @@ void Voice::Init(float sampleRate)
 
     m_osc.Init(sampleRate);
     m_lofiEnv.Init(sampleRate);
-    m_lofiLP.Init(sampleRate);
-    m_lofiHP.Init(sampleRate);
+    m_lofiLP1.Init(sampleRate);
+    m_lofiLP2.Init(sampleRate);
+    m_lofiHP1.Init(sampleRate);
+    m_lofiHP2.Init(sampleRate);
     m_trem.Init(sampleRate);
 
     m_osc.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
 	m_lofiEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.05f);
 	m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.5f);
-    m_lofiLP.SetFreq(2000.f);
-    m_lofiHP.SetFreq(200.f);
+    m_lofiLP1.SetFreq(2000.f);
+    m_lofiLP2.SetFreq(2000.f);
+    m_lofiHP1.SetFreq(200.f);
+    m_lofiHP2.SetFreq(200.f);
     m_trem.SetDepth(0.1f);
     m_trem.SetFreq(10.f);
 }
@@ -64,11 +68,11 @@ float Voice::ProcessLofi()
     m_lofiEnv.Process();
     out *= m_lofiEnv.GetValue();
 
-    m_lofiHP.Process(out);
-    out = m_lofiHP.High();
+    out = m_lofiHP1.Process(out);
+    out = m_lofiHP2.Process(out);
 
-    m_lofiLP.Process(out);
-    out = m_lofiLP.Low();
+    out = m_lofiLP1.Process(out);
+    out = m_lofiLP2.Process(out);
 
     return out;
 }
