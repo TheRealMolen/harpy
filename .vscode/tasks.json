@@ -82,8 +82,8 @@
     {
       "command": "make clean && set DEBUG=1 && make",
       "dependsOn": [
-        "build_libdaisy",
-        "build_daisysp"
+        "rebuild_libdaisy",
+        "rebuild_daisysp"
       ],
       "label": "build_all_debug",
       "options": {

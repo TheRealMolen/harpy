@@ -22,6 +22,10 @@ using daisy::Pin;
 
 extern DaisyHw hw;
 
+constexpr float kSampleRate = 48000.f;
+constexpr auto kSampleRateConfig = daisy::SaiHandle::Config::SampleRate::SAI_48KHZ;
+constexpr float kRecipSampRate = 1.f / kSampleRate;
+
 //-------------------------------------------------------------------------------------------------------------
 
 using i8 = int8_t;

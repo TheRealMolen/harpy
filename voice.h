@@ -6,6 +6,8 @@
 #include "lowpass1p.h"
 #include "highpass1p.h"
 
+#define SUPA_LO_BIT
+
 
 class Voice
 {
@@ -15,11 +17,12 @@ public:
 	float Process(float param1);
 
 	void NoteOn(u8 note, float damping);
-	float GetFreq() const { return m_string.GetFreq(); }
 
+#ifndef SUPA_LO_BIT
 	void UseDcBlock(bool use) { m_string.UseDcBlock(use); }
 
 private:
+
     float ProcessKS();
     float ProcessLofi();
 
@@ -37,5 +40,15 @@ private:
     mln::LowPass1P m_lofiLP2;
     mln::HighPass1P m_lofiHP1;
     mln::HighPass1P m_lofiHP2;
+#else
+private:
+    float ProcessSLB(float wave);
+
+    float m_freq = 220.f;
+    float m_phase = 0.f;
+    float m_phaseInc = 220.f * kRecipSampRate;
+    
+	daisysp::AdEnv m_env;
+#endif
 };
 

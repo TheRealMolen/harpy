@@ -41,7 +41,7 @@ public:
 
 private:
 	static const u32 kMaxSampRate = 48'000;
-	static const u32 kMinNativeFreq = 20;
+	static const u32 kMinNativeFreq = 40;
 	static const u32 kMaxDelaySamples = daisysp::get_next_power2((kMaxSampRate + kMinNativeFreq-1) / kMinNativeFreq);
 
     daisysp::DelayLine<float, kMaxDelaySamples>	m_delay;

@@ -69,7 +69,7 @@ private:
 	using VoiceIdList = inplace_vector<VoiceId, MaxVoices>;
 	using VoiceIdNotePair = pair<VoiceId, u8>;
 	using PlayingVoiceList = inplace_vector<VoiceIdNotePair, MaxVoices>;
-
+	
 	VoiceId PickVoice(u8 note)
 	{
 		if (!m_released.empty())

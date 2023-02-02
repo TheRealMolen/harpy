@@ -7,11 +7,14 @@
 
 #include "voicemgr.h"
 
+#include "filterstack.h"
 #include "highpass1p.h"
 
 using DaisyHw = daisy::DaisySeed;
 using daisy::GPIO;
 using daisy::Pin;
+
+constexpr bool EnableLogging = false;
 
 
 DaisyHw hw;
@@ -63,7 +66,7 @@ daisy::AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 VoiceMgr voiceMgr;
 float modWheel = 0.f;
 
-mln::HighPass1P highPass;
+mln::FilterStack<4, mln::FilterType::LoPass> outFilter;
 
 mln::RgbLed led1, led2;
 GPIO btn1, btn2;
@@ -99,12 +102,12 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 	pot1.Process();
 	pot2.Process();
 
-	highPass.SetFreq(daisysp::fmap(pot1.Value(), 20.f, 10000.f, daisysp::Mapping::EXP));
+	outFilter.SetFreq(daisysp::fmap(pot1.Value(), 5.f, 20000.f, daisysp::Mapping::EXP));
 
 	for (size_t i = 0; i < size; i++)
 	{
 		float output = voiceMgr.Process(modWheel);
-		output = highPass.Process(output);
+		output = outFilter.Process(output);
 		OUT_L[i] = output;
 		OUT_R[i] = output;
 	}
@@ -139,8 +142,11 @@ void HandleCC(u8 chan, u8 cc, u8 val)
 
 void HandleMidiMessage(const daisy::MidiEvent& msg)
 {
-	//if (msg.type != daisy::ChannelPressure)
-	//	hw.PrintLine("midi: m=%02x, c=%02x [%d, %d]", int(msg.type), int(msg.channel), int(msg.data[0]), int(msg.data[1]));
+	if constexpr (EnableLogging)
+	{
+		if (msg.type != daisy::ChannelPressure && msg.type != daisy::SystemRealTime)
+			hw.PrintLine("midi: m=%02x, c=%02x [%d, %d]", int(msg.type), int(msg.channel), int(msg.data[0]), int(msg.data[1]));
+	}
 
 	switch (msg.type)
 	{
@@ -151,25 +157,27 @@ void HandleMidiMessage(const daisy::MidiEvent& msg)
 	}
 }
 
-
 int main(void)
 {
 	hw.Init();
 	hw.SetLed(true);
 
-	INITPROFILER(hw);
-
-    // hw.StartLog(false);
-    // hw.PrintLine("heyo dumbass");
+	if constexpr (EnableLogging)
+	{
+		hw.StartLog(false);
+		hw.PrintLine("heyo dumbass");
+	}
 
 	hw.SetAudioBlockSize(4); // number of samples handled per callback
-	hw.SetAudioSampleRate(daisy::SaiHandle::Config::SampleRate::SAI_48KHZ);
+	hw.SetAudioSampleRate(kSampleRateConfig);
 
 	InitHwIO();
 
+	INITPROFILER(hw);
+
 	auto sampleRate = hw.AudioSampleRate();
 	voiceMgr.Init(sampleRate);
-	highPass.Init(sampleRate);
+	outFilter.Init(sampleRate);
 	
 
 	midi.StartReceive();
@@ -183,7 +191,7 @@ int main(void)
 	{
 		AUTOPROFILE(Total);
 
-#if D_ENABLE_CPU_PROFILING
+#ifdef D_ENABLE_CPU_PROFILING
 		u32 now = hw.system.GetNow();
 		if ((now - lastMsgTick) > msgFreq)
 		{
