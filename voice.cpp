@@ -131,59 +131,58 @@ inline float calcPolyBlepCorrection(float phase, float phaseIncPerSample, float 
 }
 
 
+inline float calcSawTri(float phase, float triangleness)
+{
+    const float negOnePoint = 0.5f * (2.f - triangleness);
+
+    // TODO: blep if triangleness is so low that we rise from ~-1 to ~1 in one sample
+    
+    if (phase <= negOnePoint)
+        return 1.f - 2.f * (phase / negOnePoint);
+    
+    return -1.f + 2.f * ((phase - negOnePoint) / (1.f - negOnePoint));
+}
+
+
 float Voice::ProcessSLB(float wave)
 {
     m_phase += m_phaseIncPerSample;
     if (m_phase >= 1.f)
         m_phase -= 1.f;
-
-    // float saw = (2.f * m_phase) - 1.f;
-    // if (wave > 0.5f)
-    //     saw -= calcPolyBlepCorrection(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
-    // float out = saw * 0.8f;
-
-    float square = (m_phase < 0.5f) ? 1.f : -1.f;
-    float phase180 = m_phase + ((m_phase < 0.5f) ? 0.5f : -0.5f);
-
-    if (wave > 0.3f)
-        square += calcPolyBlepCorrection(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
-
-    if (wave > 0.7f)
-        square -= calcPolyBlepCorrection(phase180, m_phaseIncPerSample, m_samplesPerCycle);
-
-    float out = square * 0.7f;
     
-/*
-    constexpr float squawCutoff = 0.7f;
+    constexpr float squawCutoff = 0.6f;
     float out = 0.f;
-    if (wave <= squawCutoff)
+    if (wave <= squawCutoff + 0.02f)
     {
-        //const float squawSlope = wave * (1.f / squawCutoff);  // 0 is square, 1 is saw
-        float squawSlope = 1.f;
-        float squaw = (m_phase < 0.5f)
-            ? ((squawSlope * 2.f * m_phase) - 1.f)
-            : ((squawSlope * 2.f * (m_phase - 0.5f)));
+        const float squawSlope = wave * (1.f / squawCutoff);  // 0 is square, 1 is saw
 
-        squaw -= calcPolyBlepAddition(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
+        float squaw;
+        float phase180;
+        if (m_phase < 0.5f)
+        {
+            squaw = 1.f - (squawSlope * 2.f * m_phase);
+            phase180 = m_phase + 0.5f;
+        }
+        else
+        {
+            squaw = (2.f * squawSlope * (1.f - m_phase)) - 1.f;
+            phase180 = m_phase - 0.5f;
+        }
+      
+        squaw += calcPolyBlepCorrection(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
+
+        const float midCorrection = calcPolyBlepCorrection(phase180, m_phaseIncPerSample, m_samplesPerCycle);
+        squaw -= (1.f - squawSlope) * midCorrection;
 
         out = squaw * 0.1f;
     }
     else
     {
         const float triSlope = (wave - squawCutoff) * (1.f / (1.f - squawCutoff));   // 0 is saw, 1 is tri
-        const float negOnePoint = (0.25f * triSlope);
-        const float onePoint = 1.f - negOnePoint;
-        float tri;
-        if (m_phase < negOnePoint)
-            tri = m_phase * (-1.f / negOnePoint);
-        else if (m_phase < onePoint)
-            tri = -1.f + 2.f * ((m_phase - negOnePoint) / (onePoint - negOnePoint));
-        else
-            tri = 1.f - ((onePoint - m_phase) * (-1.f / negOnePoint));
-
+        const float tri = calcSawTri(m_phase, triSlope);
         out = tri * 0.1f;
     }
-*/
+
     m_env.Process();
     out *= m_env.GetValue();
 
