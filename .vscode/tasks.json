@@ -35,7 +35,8 @@
       "type": "shell"
     },
     {
-      "command": "make && make program-dfu",
+      "command-dfu": "make && make program-dfu",
+      "command": "make && make program",
       "label": "build_and_program_dfu",
       "options": {
         "cwd": "${workspaceFolder}"
@@ -80,12 +81,27 @@
       "type": "shell"
     },
     {
+      "command": "set DEBUG=1 && make",
+      "dependsOn": [
+        "build_libdaisy",
+        "build_daisysp"
+      ],
+      "label": "build_all_debug",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "type": "shell"
+    },
+    {
       "command": "make clean && set DEBUG=1 && make",
       "dependsOn": [
         "rebuild_libdaisy",
         "rebuild_daisysp"
       ],
-      "label": "build_all_debug",
+      "label": "rebuild_all_debug",
       "options": {
         "cwd": "${workspaceFolder}"
       },
