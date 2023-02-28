@@ -46,7 +46,8 @@ private:
 
     float m_freq = 220.f;
     float m_phase = 0.f;
-    float m_phaseInc = 220.f * kRecipSampRate;
+    float m_phaseIncPerSample = 220.f * kRecipSampRate;
+    float m_samplesPerCycle = kSampleRate / 220.f;
     
 	daisysp::AdEnv m_env;
 #endif

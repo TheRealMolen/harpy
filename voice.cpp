@@ -109,20 +109,62 @@ float Voice::ProcessLofi()
 */
 
 
+// returns the value to subtract from a [-1,1] signal to smooth out a positive edge when phase crosses 1->0
+// phase in [0,1)
+inline float calcPolyBlepCorrection(float phase, float phaseIncPerSample, float samplesPerCycle)
+{
+    // just before a transition
+    if (phase >= (1.f - phaseIncPerSample)) [[unlikely]]
+    {
+        float t = (phase - 1.f) * samplesPerCycle;
+        return (t * t) + (2.f * t) + 1.f;
+    }
+
+    // just after transition
+    if (phase < phaseIncPerSample)  [[unlikely]]
+    {
+        float t = phase * samplesPerCycle;
+        return (2.f * t) - (t * t) - 1.f;
+    }
+
+    return 0.f;
+}
+
+
 float Voice::ProcessSLB(float wave)
 {
-    m_phase += m_phaseInc;
+    m_phase += m_phaseIncPerSample;
     if (m_phase >= 1.f)
         m_phase -= 1.f;
 
+    // float saw = (2.f * m_phase) - 1.f;
+    // if (wave > 0.5f)
+    //     saw -= calcPolyBlepCorrection(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
+    // float out = saw * 0.8f;
+
+    float square = (m_phase < 0.5f) ? 1.f : -1.f;
+    float phase180 = m_phase + ((m_phase < 0.5f) ? 0.5f : -0.5f);
+
+    if (wave > 0.3f)
+        square += calcPolyBlepCorrection(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
+
+    if (wave > 0.7f)
+        square -= calcPolyBlepCorrection(phase180, m_phaseIncPerSample, m_samplesPerCycle);
+
+    float out = square * 0.7f;
+    
+/*
     constexpr float squawCutoff = 0.7f;
     float out = 0.f;
     if (wave <= squawCutoff)
     {
-        const float squawSlope = wave * (1.f / squawCutoff);  // 0 is square, 1 is saw
-        const float squaw = (m_phase < 0.5f)
+        //const float squawSlope = wave * (1.f / squawCutoff);  // 0 is square, 1 is saw
+        float squawSlope = 1.f;
+        float squaw = (m_phase < 0.5f)
             ? ((squawSlope * 2.f * m_phase) - 1.f)
             : ((squawSlope * 2.f * (m_phase - 0.5f)));
+
+        squaw -= calcPolyBlepAddition(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
 
         out = squaw * 0.1f;
     }
@@ -141,7 +183,7 @@ float Voice::ProcessSLB(float wave)
 
         out = tri * 0.1f;
     }
-
+*/
     m_env.Process();
     out *= m_env.GetValue();
 
@@ -163,7 +205,8 @@ void Voice::NoteOn(u8 note, float damping)
     m_osc.SetFreq(freq);
     m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
 #else
-    m_phaseInc = freq * kRecipSampRate;
+    m_phaseIncPerSample = freq * kRecipSampRate;
+    m_samplesPerCycle = kSampleRate / freq;
     
     m_env.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
     m_env.Trigger();
