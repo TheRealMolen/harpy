@@ -65,10 +65,13 @@ public:
 
 	void erase_front()
 	{
-		if (m_used > 1)
+		if constexpr (Capacity > 1)
 		{
-			for (size_type from = 1; from < m_used; ++from)
-				m_elements[from-1] = m_elements[from];
+			if (m_used > 1)
+			{
+				for (size_type from = 1; from < m_used; ++from)
+					m_elements[from-1] = m_elements[from];
+			}
 		}
 		--m_used;
 	}

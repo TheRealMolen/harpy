@@ -23,13 +23,13 @@ public:
 		}
 	}
 
-	float Process(float p1)
+	float Process(float param0, float param1, float param2)
 	{
 		AUTOPROFILE(VoiceManager);
 
 		float out = 0.f;
 		for (Voice& voice : m_voices)
-			out += voice.Process(p1);
+			out += voice.Process(param0, param1, param2);
 		return out;
 	}
 

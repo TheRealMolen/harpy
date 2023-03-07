@@ -3,9 +3,11 @@
 #include "daisyclock.h"
 
 
+//-------------------------------------------------------------------------------------------------------------
+
 void Voice::Init(float sampleRate)
 {
-#ifndef SUPA_LO_BIT
+#if V_VOICE_MODE == VOICE_HARP
 	m_string.Init(sampleRate);
 	m_exciteEnv.Init(sampleRate);
 	m_noise.Init();
@@ -26,7 +28,7 @@ void Voice::Init(float sampleRate)
     m_trem.Init(sampleRate);
 
     m_osc.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
-	m_lofiEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.002f);
+	m_lofiEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.001f);
 	m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.5f);
     m_lofiLP1.SetFreq(2000.f);
     m_lofiLP2.SetFreq(2000.f);
@@ -34,29 +36,49 @@ void Voice::Init(float sampleRate)
     m_lofiHP2.SetFreq(200.f);
     m_trem.SetDepth(0.3f);
     m_trem.SetFreq(5.f);
-#else
+    
+#elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
 
     m_env.Init(sampleRate);
 	m_env.SetTime(daisysp::ADENV_SEG_ATTACK, 0.002f);
 	m_env.SetTime(daisysp::ADENV_SEG_DECAY, 0.5f);
 
-#endif
-}
+#elif V_VOICE_MODE == VOICE_FM
 
-float Voice::Process(float param1)
-{
-#ifndef SUPA_LO_BIT
-    float ks = ProcessKS();
-    float lofi = ProcessLofi();
-    return flerp(ks, lofi, param1);
+    m_op1.Init();
+    m_op2.Init();
+
+    m_op1.SetEnv(0.004f, 0.5f);
+    m_op2.SetEnv(0.004f, 0.5f);
 
 #else
-    return ProcessSLB(param1);
+#error unknown voice mode
 #endif
 }
 
+float Voice::Process(float param0, float param1, float param2)
+{
+#if V_VOICE_MODE == VOICE_HARP
+    float ks = ProcessKS();
+    float lofi = ProcessLofi();
 
-#ifndef SUPA_LO_BIT
+    float ta = sqrtf(param0);
+    float tb = sqrtf(1.f - param0);
+
+    return (ta * ks) + (tb * lofi);
+
+#elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
+    return ProcessSLB(param0);
+#elif V_VOICE_MODE == VOICE_FM
+    return ProcessFM(param0, param1, param2);
+#else
+#error unknown voice mode
+#endif
+}
+
+//-------------------------------------------------------------------------------------------------------------
+
+#if V_VOICE_MODE == VOICE_HARP
 float Voice::ProcessKS()
 {
     AUTOPROFILE(Voice_KS);
@@ -70,6 +92,8 @@ float Voice::ProcessKS()
 
 	return filtered;
 }
+
+//-------------------------------------------------------------------------------------------------------------
 
 float Voice::ProcessLofi()
 {
@@ -91,8 +115,10 @@ float Voice::ProcessLofi()
 
     return out;
 }
-#else
 
+#elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
+
+//-------------------------------------------------------------------------------------------------------------
 
 /*
     this sounds quite nice but is *not* a triangle...
@@ -189,13 +215,34 @@ float Voice::ProcessSLB(float wave)
     return out;
 }
 
+//-------------------------------------------------------------------------------------------------------------
+
+#elif V_VOICE_MODE == VOICE_FM
+
+float Voice::ProcessFM(float p0, float p1, float p2)
+{
+    const float intensity2to1 = p0 * 8.f;
+    
+    m_op2.SetEnv(0.005f, 0.002f + p1);
+    m_op2.SetIndex(p2 * 4.f);
+
+    const float o2 = m_op2.Process(1.f);
+    const float o1 = m_op1.Process(o2 * intensity2to1);
+
+    return o1 * 0.1f;
+}
+
+#else
+#error unknown voice mode
 #endif
+
+//-------------------------------------------------------------------------------------------------------------
 
 void Voice::NoteOn(u8 note, float damping)
 {
     float freq = daisysp::mtof(note);
 
-#ifndef SUPA_LO_BIT
+#if V_VOICE_MODE == VOICE_HARP
 	m_exciteEnv.Trigger();
 	m_string.SetFreq(freq);
 	m_string.SetDamping(damping);
@@ -203,11 +250,23 @@ void Voice::NoteOn(u8 note, float damping)
     m_lofiEnv.Trigger();
     m_osc.SetFreq(freq);
     m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
-#else
+
+#elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
     m_phaseIncPerSample = freq * kRecipSampRate;
     m_samplesPerCycle = kSampleRate / freq;
     
     m_env.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
     m_env.Trigger();
+
+#elif V_VOICE_MODE == VOICE_FM
+    m_op1.NoteOn(freq);
+    m_op2.NoteOn(freq);
+
+    m_op1.SetEnv(0.005f, 0.2f + 1.1f * damping);
+
+#else
+#error unknown voice mode
 #endif
 }
+
+//-------------------------------------------------------------------------------------------------------------

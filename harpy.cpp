@@ -59,7 +59,7 @@ private:
 }
 
 
-enum class AdcInputs : u8 { Pot1, Pot2, Count };
+enum class AdcInputs : u8 { PotNW, PotNE, PotSE, PotSW, Count };
 daisy::AdcChannelConfig adcChannelCfgs[u8(AdcInputs::Count)];
 
 
@@ -70,19 +70,23 @@ mln::FilterStack<4, mln::FilterType::LoPass> outFilter;
 
 mln::RgbLed led1, led2;
 GPIO btn1, btn2;
-daisy::AnalogControl pot1, pot2;
+daisy::AnalogControl potNW, potNE, potSE, potSW;
 
 
 void InitHwIO()
 {
 	using namespace daisy::seed;
 
-	adcChannelCfgs[u8(AdcInputs::Pot1)].InitSingle(hw.GetPin(21));
-	adcChannelCfgs[u8(AdcInputs::Pot2)].InitSingle(hw.GetPin(15));
+	adcChannelCfgs[u8(AdcInputs::PotNW)].InitSingle(A0);
+	adcChannelCfgs[u8(AdcInputs::PotNE)].InitSingle(A1);
+	adcChannelCfgs[u8(AdcInputs::PotSE)].InitSingle(A7);
+	adcChannelCfgs[u8(AdcInputs::PotSW)].InitSingle(A6);
 	hw.adc.Init(adcChannelCfgs, u8(AdcInputs::Count));
 
-	pot1.Init(hw.adc.GetPtr(u8(AdcInputs::Pot1)), hw.AudioCallbackRate());
-	pot2.Init(hw.adc.GetPtr(u8(AdcInputs::Pot2)), hw.AudioCallbackRate());
+	potNW.Init(hw.adc.GetPtr(u8(AdcInputs::PotNW)), hw.AudioCallbackRate());
+	potNE.Init(hw.adc.GetPtr(u8(AdcInputs::PotNE)), hw.AudioCallbackRate());
+	potSE.Init(hw.adc.GetPtr(u8(AdcInputs::PotSE)), hw.AudioCallbackRate());
+	potSW.Init(hw.adc.GetPtr(u8(AdcInputs::PotSW)), hw.AudioCallbackRate());
 
 	btn1.Init(D27, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 	btn2.Init(D28, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
@@ -99,14 +103,16 @@ void AudioCallback(daisy::AudioHandle::InputBuffer in, daisy::AudioHandle::Outpu
 {
 	AUTOPROFILE(AudioCallback);
 
-	pot1.Process();
-	pot2.Process();
+	potNW.Process();
+	potNE.Process();
+	potSE.Process();
+	potSW.Process();
 
-	outFilter.SetFreq(daisysp::fmap(pot1.Value(), 5.f, 20000.f, daisysp::Mapping::EXP));
+	outFilter.SetFreq(daisysp::fmap(potNE.Value(), 5.f, 20000.f, daisysp::Mapping::EXP));
 
 	for (size_t i = 0; i < size; i++)
 	{
-		float output = voiceMgr.Process(modWheel);
+		float output = voiceMgr.Process(modWheel, potNW.Value(), potSW.Value());
 		output = outFilter.Process(output);
 		OUT_L[i] = output;
 		OUT_R[i] = output;
@@ -130,7 +136,7 @@ void HandleNoteOn(u8 chan, u8 note, u8 vel)
 		ledCol = 0;
 	led1.SetRgb(u8(ledCol & 4), u8(ledCol & 2), u8(ledCol & 1));
 
-	voiceMgr.NoteOn(note, pot2.Value());
+	voiceMgr.NoteOn(note, potSE.Value());
 }
 
 void HandleCC(u8 chan, u8 cc, u8 val)
