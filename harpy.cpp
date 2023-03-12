@@ -20,6 +20,11 @@ constexpr bool EnableLogging = false;
 DaisyHw hw;
 daisy::MidiUartHandler midi;
 
+/* NOTE! there a few a few tweaks we might need to the midi implementation....
+	1. decrease sysex buffer size to 1 at top of midi.h (unless you plan to use sysex)
+	2. add an "else" that resets the parser in the "case ParserSysEx:" code - otherwise any corrupt byte that starts a sysex will likely never recover
+*/
+
 namespace mln
 {
 
@@ -170,11 +175,11 @@ int main(void)
 
 	if constexpr (EnableLogging)
 	{
-		hw.StartLog(false);
+		hw.StartLog(true);
 		hw.PrintLine("heyo dumbass");
 	}
 
-	hw.SetAudioBlockSize(4); // number of samples handled per callback
+	hw.SetAudioBlockSize(8); // number of samples handled per callback
 	hw.SetAudioSampleRate(kSampleRateConfig);
 
 	InitHwIO();

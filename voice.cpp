@@ -5,6 +5,29 @@
 
 //-------------------------------------------------------------------------------------------------------------
 
+// returns the value to subtract from a [-1,1] signal to smooth out a positive edge when phase crosses 1->0
+// phase in [0,1)
+inline float calcPolyBlepCorrection(float phase, float phaseIncPerSample, float samplesPerCycle)
+{
+    // just before a transition
+    if (phase >= (1.f - phaseIncPerSample)) [[unlikely]]
+    {
+        float t = (phase - 1.f) * samplesPerCycle;
+        return (t * t) + (2.f * t) + 1.f;
+    }
+
+    // just after transition
+    if (phase < phaseIncPerSample)  [[unlikely]]
+    {
+        float t = phase * samplesPerCycle;
+        return (2.f * t) - (t * t) - 1.f;
+    }
+
+    return 0.f;
+}
+
+//-------------------------------------------------------------------------------------------------------------
+
 void Voice::Init(float sampleRate)
 {
 #if V_VOICE_MODE == VOICE_HARP
@@ -19,21 +42,17 @@ void Voice::Init(float sampleRate)
 	m_exciteEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.0001f);
 	m_exciteEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.005f);
 
-    m_osc.Init(sampleRate);
+    //m_osc.Init(sampleRate);
     m_lofiEnv.Init(sampleRate);
-    m_lofiLP1.Init(sampleRate);
-    m_lofiLP2.Init(sampleRate);
-    m_lofiHP1.Init(sampleRate);
-    m_lofiHP2.Init(sampleRate);
+    m_lofiLP.Init(sampleRate);
+    m_lofiHP.Init(sampleRate);
     m_trem.Init(sampleRate);
 
-    m_osc.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
+   // m_osc.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
 	m_lofiEnv.SetTime(daisysp::ADENV_SEG_ATTACK, 0.001f);
 	m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.5f);
-    m_lofiLP1.SetFreq(2000.f);
-    m_lofiLP2.SetFreq(2000.f);
-    m_lofiHP1.SetFreq(200.f);
-    m_lofiHP2.SetFreq(200.f);
+    m_lofiLP.SetFreq(2000.f);
+    m_lofiHP.SetFreq(200.f);
     m_trem.SetDepth(0.3f);
     m_trem.SetFreq(5.f);
     
@@ -65,7 +84,7 @@ float Voice::Process(float param0, float param1, float param2)
     float ta = sqrtf(param0);
     float tb = sqrtf(1.f - param0);
 
-    return (ta * ks) + (tb * lofi);
+    return 0.5f * ((tb * ks) + (ta * lofi));
 
 #elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
     return ProcessSLB(param0);
@@ -99,19 +118,23 @@ float Voice::ProcessLofi()
 {
     AUTOPROFILE(Voice_Lofi);
     
-    float out = m_osc.Process();
-    out *= (1.f / 4.f);    // approx match volume with ks
+    m_phase += m_phaseIncPerSample;
+    if (m_phase >= 1.f)
+        m_phase -= 1.f;
+
+    float saw = 1.f - (2.f * m_phase);    
+    saw += calcPolyBlepCorrection(m_phase, m_phaseIncPerSample, m_samplesPerCycle);
+
+    float out = saw;
+    out *= (1.f / 6.f);    // approx match volume with ks
 
     out = m_trem.Process(out);
 
     m_lofiEnv.Process();
     out *= m_lofiEnv.GetValue();
 
-    out = m_lofiHP1.Process(out);
-    out = m_lofiHP2.Process(out);
-
-    out = m_lofiLP1.Process(out);
-    out = m_lofiLP2.Process(out);
+    out = m_lofiHP.Process(out);
+    out = m_lofiLP.Process(out);
 
     return out;
 }
@@ -133,29 +156,6 @@ float Voice::ProcessLofi()
         else
             tri = (onePoint - m_phase) * (1.f / negOnePoint);
 */
-
-
-// returns the value to subtract from a [-1,1] signal to smooth out a positive edge when phase crosses 1->0
-// phase in [0,1)
-inline float calcPolyBlepCorrection(float phase, float phaseIncPerSample, float samplesPerCycle)
-{
-    // just before a transition
-    if (phase >= (1.f - phaseIncPerSample)) [[unlikely]]
-    {
-        float t = (phase - 1.f) * samplesPerCycle;
-        return (t * t) + (2.f * t) + 1.f;
-    }
-
-    // just after transition
-    if (phase < phaseIncPerSample)  [[unlikely]]
-    {
-        float t = phase * samplesPerCycle;
-        return (2.f * t) - (t * t) - 1.f;
-    }
-
-    return 0.f;
-}
-
 
 inline float calcSawTri(float phase, float triangleness)
 {
@@ -248,10 +248,17 @@ void Voice::NoteOn(u8 note, float damping)
 	m_string.SetDamping(damping);
 
     m_lofiEnv.Trigger();
-    m_osc.SetFreq(freq);
+    
+    m_phase = 0.f;
+    m_freq = freq;
+    m_phaseIncPerSample = freq * kRecipSampRate;
+    m_samplesPerCycle = kSampleRate / freq;
+
     m_lofiEnv.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
 
 #elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
+    m_phase = 0.f;
+    m_freq = freq;
     m_phaseIncPerSample = freq * kRecipSampRate;
     m_samplesPerCycle = kSampleRate / freq;
     

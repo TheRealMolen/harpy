@@ -65,7 +65,7 @@ public:
 
 private:
 	using VoiceId = u8;
-	static const VoiceId MaxVoices = 8;
+	static const VoiceId MaxVoices = 6;
 	using VoiceIdList = inplace_vector<VoiceId, MaxVoices>;
 	using VoiceIdNotePair = pair<VoiceId, u8>;
 	using PlayingVoiceList = inplace_vector<VoiceIdNotePair, MaxVoices>;

@@ -4,6 +4,7 @@
 
 #include "fm_operator.h"
 #include "ks.h"
+#include "filterstack.h"
 #include "lowpass1p.h"
 #include "highpass1p.h"
 
@@ -11,7 +12,7 @@
 #define VOICE_SUPA_LO_BIT   (2)
 #define VOICE_FM            (3)
 
-#define V_VOICE_MODE    VOICE_FM
+#define V_VOICE_MODE    VOICE_HARP
 
 
 class Voice
@@ -38,13 +39,15 @@ private:
 	daisysp::Svf m_lowPass;
 
     // lofi string -------------
-    daisysp::Oscillator m_osc;
+    float m_freq = 220.f;
+    float m_phase = 0.f;
+    float m_phaseIncPerSample = 220.f * kRecipSampRate;
+    float m_samplesPerCycle = kSampleRate / 220.f;
+
     daisysp::Tremolo m_trem;
 	daisysp::AdEnv m_lofiEnv;
-    mln::LowPass1P m_lofiLP1;
-    mln::LowPass1P m_lofiLP2;
-    mln::HighPass1P m_lofiHP1;
-    mln::HighPass1P m_lofiHP2;
+    mln::FilterStack<2> m_lofiLP;
+    mln::FilterStack<2, mln::FilterType::HiPass> m_lofiHP;
 #elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
 private:
     float ProcessSLB(float wave);
