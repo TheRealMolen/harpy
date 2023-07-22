@@ -141,7 +141,7 @@ void HandleNoteOn(u8 chan, u8 note, u8 vel)
 		ledCol = 0;
 	led1.SetRgb(u8(ledCol & 4), u8(ledCol & 2), u8(ledCol & 1));
 
-	voiceMgr.NoteOn(note, potSE.Value());
+	voiceMgr.NoteOn(note, potSE.Value(), modWheel, potNW.Value(), potSW.Value());
 }
 
 void HandleCC(u8 chan, u8 cc, u8 val)

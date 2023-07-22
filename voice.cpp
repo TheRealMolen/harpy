@@ -70,6 +70,14 @@ void Voice::Init(float sampleRate)
     m_op1.SetEnv(0.004f, 0.5f);
     m_op2.SetEnv(0.004f, 0.5f);
 
+#elif V_VOICE_MODE == VOICE_HARM
+
+    m_osc.Init();
+
+    m_env.Init(sampleRate);
+	m_env.SetTime(daisysp::ADENV_SEG_ATTACK, 0.002f);
+	m_env.SetTime(daisysp::ADENV_SEG_DECAY, 0.5f);
+
 #else
 #error unknown voice mode
 #endif
@@ -88,8 +96,13 @@ float Voice::Process(float param0, float param1, float param2)
 
 #elif V_VOICE_MODE == VOICE_SUPA_LO_BIT
     return ProcessSLB(param0);
+
 #elif V_VOICE_MODE == VOICE_FM
     return ProcessFM(param0, param1, param2);
+
+#elif V_VOICE_MODE == VOICE_HARM
+    return ProcessHarm(param0, param1, param2);
+
 #else
 #error unknown voice mode
 #endif
@@ -100,7 +113,7 @@ float Voice::Process(float param0, float param1, float param2)
 #if V_VOICE_MODE == VOICE_HARP
 float Voice::ProcessKS()
 {
-    AUTOPROFILE(Voice_KS);
+    AUTOPROFILE(Voice_A);
 
 	float exciteEnvAmount = m_exciteEnv.Process();
 	float excite = exciteEnvAmount * exciteEnvAmount * m_noise.Process();
@@ -116,7 +129,7 @@ float Voice::ProcessKS()
 
 float Voice::ProcessLofi()
 {
-    AUTOPROFILE(Voice_Lofi);
+    AUTOPROFILE(Voice_B);
     
     m_phase += m_phaseIncPerSample;
     if (m_phase >= 1.f)
@@ -232,13 +245,29 @@ float Voice::ProcessFM(float p0, float p1, float p2)
     return o1 * 0.1f;
 }
 
+//-------------------------------------------------------------------------------------------------------------
+
+#elif V_VOICE_MODE == VOICE_HARM
+
+float Voice::ProcessHarm(float p0, float p1, float p2)
+{
+    AUTOPROFILE(Voice_A);
+
+    float out = m_osc.Process(p0);
+
+    m_env.Process();
+    out *= m_env.GetValue();
+
+    return out;
+}
+
 #else
 #error unknown voice mode
 #endif
 
 //-------------------------------------------------------------------------------------------------------------
 
-void Voice::NoteOn(u8 note, float damping)
+void Voice::NoteOn(u8 note, float damping, float param0, float param1, float param2)
 {
     float freq = daisysp::mtof(note);
 
@@ -270,6 +299,12 @@ void Voice::NoteOn(u8 note, float damping)
     m_op2.NoteOn(freq);
 
     m_op1.SetEnv(0.005f, 0.2f + 1.1f * damping);
+
+#elif V_VOICE_MODE == VOICE_HARM
+    m_osc.NoteOn(freq, param0);
+
+    m_env.SetTime(daisysp::ADENV_SEG_DECAY, 0.2f + 1.1f * damping);
+    m_env.Trigger();
 
 #else
 #error unknown voice mode

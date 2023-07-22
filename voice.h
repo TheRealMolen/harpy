@@ -3,6 +3,7 @@
 #include "mln_core.h"
 
 #include "fm_operator.h"
+#include "harm_osc.h"
 #include "ks.h"
 #include "filterstack.h"
 #include "lowpass1p.h"
@@ -11,8 +12,9 @@
 #define VOICE_HARP          (1)
 #define VOICE_SUPA_LO_BIT   (2)
 #define VOICE_FM            (3)
+#define VOICE_HARM          (4)
 
-#define V_VOICE_MODE    VOICE_HARP
+#define V_VOICE_MODE    VOICE_HARM
 
 
 class Voice
@@ -22,7 +24,7 @@ public:
 
 	float Process(float param0, float param1, float param2);
 
-	void NoteOn(u8 note, float damping);
+	void NoteOn(u8 note, float damping, float param0, float param1, float param2);
 
 #if V_VOICE_MODE == VOICE_HARP
 	void UseDcBlock(bool use) { m_string.UseDcBlock(use); }
@@ -66,6 +68,13 @@ private:
     mln::FmOperator m_op2;
     
 	daisysp::AdEnv m_envCarrier;
+	daisysp::AdEnv m_env;
+
+#elif V_VOICE_MODE == VOICE_HARM
+private:
+    float ProcessHarm(float p0, float p1, float p2);
+
+    mln::HarmonicOsc m_osc;
 	daisysp::AdEnv m_env;
 #else
 #error unknown voice mode

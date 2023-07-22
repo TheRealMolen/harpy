@@ -28,8 +28,8 @@ public:
         // add user timers here:
         AudioCallback,
         VoiceManager,
-        Voice_KS,
-        Voice_Lofi,
+        Voice_A,
+        Voice_B,
 
         // leave these ones alone for the system
         Total,          // the full time from one call to Reset to the next

@@ -33,7 +33,7 @@ public:
 		return out;
 	}
 
-	void NoteOn(u8 note, float damping)
+	void NoteOn(u8 note, float damping, float param0, float param1, float param2)
 	{
 		//hw.Print("vm: noteon: %u voices released, %u voices playing. ", u32(m_released.size()), u32(m_playing.size()));
 
@@ -41,7 +41,7 @@ public:
 
 		//hw.PrintLine("picked voice %u", u32(id));
 
-		m_voices[id].NoteOn(note, damping);
+		m_voices[id].NoteOn(note, damping, param0, param1, param2);
 		m_playing.push_back(VoiceIdNotePair{id, note});
 
 		// hw.Print("....playing: ");
