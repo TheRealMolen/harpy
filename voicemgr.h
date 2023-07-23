@@ -58,7 +58,13 @@ public:
 		auto itFound = std::find_if(begin(m_playing), end(m_playing), [=](auto& idNote) { return idNote.second == note; });
         if (itFound != end(m_playing))
         {
-            m_released.push_back(itFound->first);
+			const VoiceId id = itFound->first;
+
+			// TODO: add to fade out list to fix clicks when voice stealing
+
+			m_voices[id].NoteOff();
+
+            m_released.push_back(id);
             m_playing.erase(itFound);
         }
 	}

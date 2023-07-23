@@ -25,6 +25,7 @@ public:
 	float Process(float param0, float param1, float param2);
 
 	void NoteOn(u8 note, float damping, float param0, float param1, float param2);
+    void NoteOff();
 
 #if V_VOICE_MODE == VOICE_HARP
 	void UseDcBlock(bool use) { m_string.UseDcBlock(use); }
@@ -75,7 +76,8 @@ private:
     float ProcessHarm(float p0, float p1, float p2);
 
     mln::HarmonicOsc m_osc;
-	daisysp::AdEnv m_env;
+	daisysp::Adsr m_env;
+    bool m_gate;
 #else
 #error unknown voice mode
 #endif

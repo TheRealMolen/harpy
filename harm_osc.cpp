@@ -12,7 +12,7 @@ void SinusoidalOsc::Init(float freq)
     m_osin = 0.f;
     m_ocos = 1.f;
 
-    float phaseIncPerSample = freq * kRecipSampRate;
+    float phaseIncPerSample = kTwoPi * freq * kRecipSampRate;
     m_sinPhaseInc = sinf(phaseIncPerSample);
     m_cosPhaseInc = cosf(phaseIncPerSample);
 }
@@ -64,7 +64,7 @@ float HarmonicOsc::Process(float decayExponent)
     if (scale > 0.01f)
         out /= scale;
 
-    out *= 0.4f;
+    out *= 0.2f;
     return out;
 }
 
