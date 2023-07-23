@@ -34,7 +34,7 @@ private:
 
 class HarmonicOsc
 {
-    static const u8 kMaxHarms = 16;
+    static const u8 kMaxHarms = 20;
 
 public:
 	void Init();

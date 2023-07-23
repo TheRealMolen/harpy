@@ -253,7 +253,7 @@ float Voice::ProcessHarm(float p0, float p1, float p2)
 {
     AUTOPROFILE(Voice_A);
 
-    float out = m_osc.Process(p0);
+    float out = m_osc.Process(p1);
 
     m_env.Process();
     out *= m_env.GetValue();
